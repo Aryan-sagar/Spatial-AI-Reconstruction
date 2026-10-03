@@ -29,3 +29,6 @@ pose:
 
 logging:
   level: INFO
+
+frames:
+  imu_window_sec: 0.05           # IMU samples within +/- this of the frame timestamp are attached (clock relation unproven)
