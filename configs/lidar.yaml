@@ -1,0 +1,32 @@
+# LiDAR tier config (Phase 0: identical to default; overrides added in later phases)
+dataset:
+  rgb: {width: 1920, height: 1440}
+  depth: {width: 256, height: 192, dtype: uint16}
+  files:
+    depth_dir: depth
+    confidence_dir: confidence
+    rgb: rgb.mp4
+    odometry: odometry.csv
+    camera_matrix: camera_matrix.csv
+    imu: imu.csv
+
+inventory:
+  depth_sample_count: 5          # frames opened (first, last, evenly spaced) to check dims/dtype
+  quaternion_norm_tolerance: 1.0e-3
+  intrinsics_consistency_tolerance_px: 1.0e-3
+
+synchronization:
+  hypothesis: index_aligned      # frame i -> RGB[i], depth[i], odometry[i]  (a hypothesis, validated below)
+  duration_tolerance_frac: 0.01  # |odometry span - rgb_frames/fps| / span
+  fps_tolerance_frac: 0.02
+  strict: true                   # raise on failure (report is always written)
+
+calibration:
+  depth_scale: {value: 0.001, unit: meters_per_raw_unit, status: provisional}
+  depth_intrinsics: {mode: scaled_rgb_intrinsics}
+
+pose:
+  convention: camera_to_world    # NOT yet proven; see docs/assumptions.md
+
+logging:
+  level: INFO
