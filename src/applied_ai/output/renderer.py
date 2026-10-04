@@ -34,6 +34,7 @@ def _rot(xy, deg):
 
 def render_plan(scene: dict, out_png: Path, out_svg: Path) -> None:
     fig, ax = plt.subplots(figsize=(9, 7))
+    banners: list[str] = []
     for room in scene["rooms"]:
         rot = -room["plan_rotation_deg"]
         poly = _rot(room["polygon"], rot)
@@ -72,12 +73,16 @@ def render_plan(scene: dict, out_png: Path, out_svg: Path) -> None:
             ax.plot(*np.vstack((poly, poly[:1])).T, color="#c0392b", lw=1.5, ls="--", zorder=2)
             ax.text(*c, f"{room['id']}\nAREA UNRELIABLE\n{area['value']:.1f} m² (range {ci['lower']:.1f}-{ci['upper']:.1f})\nh = {ch_txt}",
                     ha="center", va="center", fontsize=9, color="#c0392b")
-            ax.text(0.5, 0.01, "LAYOUT UNRELIABLE: " + "; ".join(room.get("layout_unreliable_reasons", [])), transform=ax.transAxes, ha="center", va="bottom",
-                    fontsize=6.5, color="#c0392b", wrap=True)
+            banners.append(f"{room['id']} LAYOUT UNRELIABLE: " + "; ".join(room.get("layout_unreliable_reasons", [])))
     ax.margins(0.18); ax.set_aspect("equal"); ax.set_xlabel("m"); ax.set_ylabel("m")
     ax.set_title(f"{scene['capture_id']}  [{scene['tier']}]  schema {scene['schema_version']}", fontsize=10)
     ax.grid(alpha=0.2)
     fig.tight_layout()
+    if banners:   # wrapped to the figure width, below the axes, so long reason lists are never clipped
+        import textwrap
+        txt = "\n".join(textwrap.fill(b, 120) for b in banners)
+        fig.subplots_adjust(bottom=0.08 + 0.025 * txt.count("\n"))
+        fig.text(0.5, 0.005, txt, ha="center", va="bottom", fontsize=6.5, color="#c0392b")
     Path(out_png).parent.mkdir(parents=True, exist_ok=True)
     _save(fig, out_png, dpi=150); _save(fig, out_svg)
     plt.close(fig)
