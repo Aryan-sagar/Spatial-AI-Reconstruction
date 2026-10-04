@@ -119,6 +119,7 @@ floorplan:
   min_camera_inside_frac: 0.5    # area is flagged UNRELIABLE if fewer camera positions than this lie inside the enclosed region
   min_floor_coverage: 0.5        # warn if floor evidence backs less than this share of the enclosed region
   outside_evidence_warn_m2: 0.5  # warn if this much floor evidence lies outside the enclosed region
+  max_outside_evidence_frac: 0.5 # area is flagged UNRELIABLE if floor evidence outside the region exceeds this fraction of the region's area (ASSUMED; a corridor seen through a door stays well below it)
 
 openings:
   bin_m: 0.02

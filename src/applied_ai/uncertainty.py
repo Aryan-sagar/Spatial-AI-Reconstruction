@@ -55,6 +55,15 @@ class UncertaintyModel:
                 "confidence_interval": {"lower": ci["lower"], "upper": ci["upper"], "confidence_level": ci["confidence_level"]},
                 "status": status, "method": method, "supporting_artifacts": artifacts or [], "uncertainty_basis": ci["basis"]}
 
+    def bounded(self, value: float, lower: float, upper: float, unit: str, method: str, basis: str, reasons: list[str],
+                artifacts: list[str] | None = None) -> dict:
+        """Status 'estimated' measurement whose interval is [lower, upper] from evidence bounds (widened to contain the value), flagged
+        unreliable with the reasons. Used when a quality check says the tier-prior interval would be confident garbage."""
+        lo, hi = min(lower, value), max(upper, value)
+        return {"value": float(value), "unit": unit, "confidence_interval": {"lower": float(lo), "upper": float(hi), "confidence_level": self.level},
+                "status": "estimated", "method": method, "supporting_artifacts": artifacts or [], "uncertainty_basis": basis,
+                "reliable": False, "unreliable_reasons": list(reasons)}
+
     @staticmethod
     def unobserved(unit: str, method: str, reason: str) -> dict:
         return {"value": None, "unit": unit, "confidence_interval": None, "status": "unobserved", "method": method,

@@ -125,7 +125,13 @@ def floor_footprint(L: np.ndarray, walls: list[dict], cfg: dict, cam_uv: np.ndar
         cf = enc["camera_fraction_inside"]
         if cf is not None and cf < fc.get("min_camera_inside_frac", 0.5):
             reasons.append(f"only {cf:.0%} of camera positions lie inside the enclosed region")
-        if out["enclosure"].get("floor_evidence_outside_region_m2", 0.0) > fc.get("outside_evidence_warn_m2", 0.5):
-            reasons.append(f"{out['enclosure']['floor_evidence_outside_region_m2']:.1f} m2 of floor evidence lies outside the region")
+        outside_m2 = out["enclosure"].get("floor_evidence_outside_region_m2", 0.0)
+        if outside_m2 > fc.get("max_outside_evidence_frac", 0.5) * max(out["area_m2"], 1e-6):   # relative: a corridor seen through a door is normal
+            reasons.append(f"{outside_m2:.1f} m2 of floor evidence lies outside the region ({outside_m2 / max(out['area_m2'], 1e-6):.0%} of its area)")
     out["area_reliable"], out["unreliable_reasons"] = not reasons, reasons
+    # Evidence-derived bounds used ONLY to widen the interval when the footprint is unreliable: observed floor is a lower bound for the
+    # floor area of the scanned space, and the convex hull of the detected walls is a rough upper bound for the space they delimit.
+    if walls:
+        E = np.array([e for w in walls for e in endpoints(w)], np.float32)
+        out["wall_hull_area_m2"] = float(cv2.contourArea(cv2.convexHull(E)))
     return out

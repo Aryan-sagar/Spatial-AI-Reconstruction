@@ -31,7 +31,15 @@ def build_room(room_id, raw_walls, final_walls, openings, footprint, fc, plan_ro
                     "width": um.measurement("opening_width", o["width"], "m", "mid_band_density_gap+see_through", "observed",
                                             o["bin_resolution_m"] / 2, o["see_through_points"], artifacts),
                     "evidence": {"see_through_points": o["see_through_points"], "low_band_fill": o["low_band_fill"], "bin_resolution_m": o["bin_resolution_m"]}})
-    area = um.measurement("floor_area", footprint["area_m2"], "m2", footprint.get("method", "floor_evidence_grid_closed_filled"), "observed", 0.0, footprint["floor_points"], artifacts)
+    method = footprint.get("method", "floor_evidence_grid_closed_filled")
+    layout_reliable = bool(footprint.get("area_reliable", True))
+    if layout_reliable:
+        area = um.measurement("floor_area", footprint["area_m2"], "m2", method, "observed", 0.0, footprint["floor_points"], artifacts)
+    else:
+        lo = footprint.get("floor_evidence_area_m2", footprint["area_m2"])
+        hi = footprint.get("wall_hull_area_m2", footprint["area_m2"])
+        area = um.bounded(footprint["area_m2"], lo, hi, "m2", method, "unreliable_footprint: interval = [observed floor evidence, convex hull of detected walls]",
+                          footprint.get("unreliable_reasons", []), artifacts)
     if fc.get("ceiling") is not None:
         c, f = fc["ceiling"], fc["floor"]
         ch = um.measurement("ceiling_height", fc["ceiling_height"], "m", "floor_ceiling_plane_distance", "observed",
@@ -39,6 +47,7 @@ def build_room(room_id, raw_walls, final_walls, openings, footprint, fc, plan_ro
     else:
         ch = um.unobserved("m", "floor_ceiling_plane_distance", "no ceiling plane observed in the scan; height is not invented")
     return {"id": room_id, "polygon": footprint["polygon"].tolist(), "plan_rotation_deg": plan_rotation_deg, "floor_area": area, "ceiling_height": ch,
+            "layout_reliable": layout_reliable, "layout_unreliable_reasons": list(footprint.get("unreliable_reasons", [])),
             "walls": walls, "openings": ops,
             "surfaces": [{"id": "surface_floor", "label": "floor", "normal_world": fc["floor"]["normal"].tolist(), "d_world": float(fc["floor"]["d"]),
                           "support_points": fc["floor"]["support_count"]}] +

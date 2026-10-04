@@ -64,8 +64,16 @@ def render_plan(scene: dict, out_png: Path, out_svg: Path) -> None:
         c = poly.mean(0)
         area, ch = room["floor_area"], room["ceiling_height"]
         ch_txt = f"{ch['value']:.2f} m" if ch["value"] is not None else "ceiling unobserved"
-        ax.text(*c, f"{room['id']}\n{area['value']:.1f} m² (±{(area['confidence_interval']['upper'] - area['confidence_interval']['lower']) / 2:.1f})\nh = {ch_txt}",
-                ha="center", va="center", fontsize=9)
+        if area.get("reliable", True):
+            ax.text(*c, f"{room['id']}\n{area['value']:.1f} m² (±{(area['confidence_interval']['upper'] - area['confidence_interval']['lower']) / 2:.1f})\nh = {ch_txt}",
+                    ha="center", va="center", fontsize=9)
+        else:
+            ci = area["confidence_interval"]
+            ax.plot(*np.vstack((poly, poly[:1])).T, color="#c0392b", lw=1.5, ls="--", zorder=2)
+            ax.text(*c, f"{room['id']}\nAREA UNRELIABLE\n{area['value']:.1f} m² (range {ci['lower']:.1f}-{ci['upper']:.1f})\nh = {ch_txt}",
+                    ha="center", va="center", fontsize=9, color="#c0392b")
+            ax.text(0.5, 0.01, "LAYOUT UNRELIABLE: " + "; ".join(room.get("layout_unreliable_reasons", [])), transform=ax.transAxes, ha="center", va="bottom",
+                    fontsize=6.5, color="#c0392b", wrap=True)
     ax.margins(0.18); ax.set_aspect("equal"); ax.set_xlabel("m"); ax.set_ylabel("m")
     ax.set_title(f"{scene['capture_id']}  [{scene['tier']}]  schema {scene['schema_version']}", fontsize=10)
     ax.grid(alpha=0.2)

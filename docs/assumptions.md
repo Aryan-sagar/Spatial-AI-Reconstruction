@@ -20,3 +20,10 @@
 | Corner closing | **INFERRED, recorded** | an open wall end is extended to a perpendicular wall within `corner_extend_m` (1.0, ASSUMED). Each extension is stored as `inferred_ext_m` and appears in `diagnostics.quality.inferred_corner_extension_m`. Gaps larger than that are NOT closed (the outline then stays open and the run warns) | `test_close_corners_*` |
 | Floor area semantics | **observed-surface-bounded, not wall-to-wall** | area = region enclosed by observed wall/furniture-front surfaces that holds the camera path (centre-line semantics), NOT the observed floor evidence. A tall furniture front can therefore shorten the area relative to a tape wall-to-wall measurement. **State the ground-truth convention in gt.yaml** (`docs/ground_truth_format.md`). `floor_coverage_frac`, outside-evidence area and camera-fraction-inside are reported so a weakly supported area is visible | `diagnostics.quality.footprint_enclosure` |
 | Interval on floor area | **still the uncalibrated prior (rel 1.2%)** | the area interval does NOT yet reflect outline uncertainty (inferred corners, coverage); it will only be honest after `evaluate --calibrate` on real ground truth | needs ground truth |
+
+## Footprint reliability (floorplan.min_camera_inside_frac, min_floor_coverage, max_outside_evidence_frac) - ASSUMED thresholds
+A wall-enclosed floor area is published as a tight `observed` measurement only if (a) at least 50% of camera positions lie inside the enclosed region,
+(b) floor evidence backs at least 50% of it, and (c) floor evidence outside the region is at most 50% of its area. Otherwise the area is published as
+`estimated`, `reliable: false`, with the failed checks as `unreliable_reasons`, and its interval is [observed floor evidence area, convex hull of the
+detected walls] instead of a tier prior; the plan draws it dashed red with the reasons. Thresholds are unvalidated: on the synthetic furnished rooms
+all four pass (corridor seen through the door stays at 3-11% outside evidence); on `single_room` all three fail. Revisit once real ground truth exists.
