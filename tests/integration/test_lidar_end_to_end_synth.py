@@ -58,3 +58,15 @@ def test_biased_camera_up_hint_does_not_break_floor_detection(tmp_path, cfg):
     assert scene["diagnostics"]["quality"]["up_hint"]["source"] == "trajectory_pca"
     assert abs(r["floor_area"]["value"] - gt["area"]) / gt["area"] < 0.05
     assert sorted(round(w["length"]["value"]) for w in r["walls"]) == [3, 3, 4, 4]
+
+
+def test_sparse_floor_evidence_yields_an_honest_empty_segmentation_not_a_wrong_room(tmp_path, cfg):
+    """KNOWN LIMITATION, kept as a test so it cannot be forgotten: this synthetic scan sees only ~1 m2 of the 12 m2 floor, and the segmentation derives free
+    space from floor evidence + camera trail, so it reports no rooms (with a warning) rather than a wrong one. Visibility carving from the camera
+    positions is the planned fix. The single-room measurements above are unaffected."""
+    gt, scene = _scene(tmp_path, cfg)
+    mr = scene["diagnostics"]["multiroom"]
+    assert mr["status"] == "experimental_unvalidated" and mr["rooms"] == [] and mr["warnings"] and mr["dropped_basins"]
+    assert (tmp_path / "out" / "debug" / "rooms.png").stat().st_size > 1000
+    assert not any(k.startswith("_") for k in mr)                                    # private arrays never leak into scene.json
+    assert scene["rooms"][0]["floor_area"]["status"] == "observed"                   # sparse floor alone does not downgrade a correct, enclosed area

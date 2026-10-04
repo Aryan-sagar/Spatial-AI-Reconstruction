@@ -13,11 +13,12 @@ from ..geometry.coordinate_system import FloorCoordinateSystem, UpAxisError, cam
 from ..geometry.floorplan import floor_footprint
 from ..geometry.openings import detect_openings
 from ..geometry.room_layout import extract_walls
+from ..geometry.room_segmentation import segment_rooms
 from ..geometry.rooms import build_room
 from ..io.dataset import ScanDataset
 from ..logging_utils import stage
 from ..output.provenance import build_provenance
-from ..output.renderer import render_plan, render_topdown
+from ..output.renderer import render_plan, render_rooms, render_topdown
 from ..output.schema import SCHEMA_VERSION, iter_measurements, validate_scene
 from ..uncertainty import UncertaintyModel
 from .pipeline import keyframe_ids, reconstruct_frame, reconstruct_scene_cloud
@@ -89,6 +90,10 @@ def run_lidar(scan: Path, cfg: dict, out_dir: Path, config_path: str | None = No
         col_stats = minfo["column_filter"]
     with stage("floorplan", timings):
         fp = floor_footprint(L, final, cfg, cam_uv)
+    with stage("room_segmentation", timings):   # additive: does not change the single-room scene below; reported in diagnostics + debug/rooms.png
+        seg = segment_rooms(L[np.abs(L[:, 2]) < cfg["floorplan"]["floor_band_m"], :2], cells, cam_uv, cfg)
+    log.info("room segmentation: %d basins kept (%s m2), %d dropped, %d open passages", len(seg["rooms"]), [round(r["area_m2"], 1) for r in seg["rooms"]],
+             len(seg["dropped_basins"]), len(seg["connections"]))
     if not fp.get("area_reliable", True):
         log.error("FLOOR AREA UNRELIABLE - do not treat as a measurement: %s", "; ".join(fp["unreliable_reasons"]))
     with stage("openings", timings):
@@ -100,6 +105,7 @@ def run_lidar(scan: Path, cfg: dict, out_dir: Path, config_path: str | None = No
         dbg = out_dir / "debug"
         render_topdown(dbg / "topdown.png", cells, L[np.abs(L[:, 2]) < cfg["floorplan"]["floor_band_m"], :2], cam_uv, all_raw_walls, final,
                        {p["id"] for p in prune_info.get("pruned", [])})
+        render_rooms(dbg / "rooms.png", seg, cam_uv)
         write_ply(dbg / "floor_plane.ply", fc["floor"]["points"])
         if fc.get("ceiling") is not None:
             write_ply(dbg / "ceiling_plane.ply", fc["ceiling"]["points"])
@@ -112,6 +118,8 @@ def run_lidar(scan: Path, cfg: dict, out_dir: Path, config_path: str | None = No
                                  "scale_identified": (conv or {}).get("scale_identified"), "scale_sensitivity": (conv or {}).get("scale_sensitivity"),
                                  "convention_notes": (conv or {}).get("notes", []), "depth_intrinsics_mode": cfg["calibration"]["depth_intrinsics"]["mode"],
                                  "uncertainty": "intervals are UNCALIBRATED PRIORS unless uncertainty.calibration_file is set"},
+                 "multiroom": {"status": "experimental_unvalidated", "note": "free-space segmentation of the whole scan; areas are obstacle-shrunk free-space estimates, not tape wall-to-wall; not yet part of the scene rooms",
+                               **{k: v for k, v in seg.items() if not k.startswith("_")}},
                  "drift": {"status": "not_run", "note": "drift correction not implemented; poses are used as supplied (baseline)"},
                  "runtime": timings,
                  "quality": {"keyframes": len(kf_ids), "cloud": cstats, "floor": {"support": fc["floor"]["support_count"], "residual_std_m": fc["floor"]["residual_std"]},

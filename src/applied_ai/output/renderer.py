@@ -107,3 +107,30 @@ def render_topdown(path: Path, wall_cells, floor_uv, cam_uv, raw_walls, final_wa
     ax.set_aspect("equal"); ax.grid(alpha=0.2); ax.legend(loc="upper right", fontsize=7, markerscale=8)
     ax.set_title("top-down debug (floor-plane coordinates, metres)")
     fig.tight_layout(); Path(path).parent.mkdir(parents=True, exist_ok=True); _save(fig, path, dpi=130); plt.close(fig)
+
+
+def render_rooms(path: Path, seg: dict, cam_uv: np.ndarray) -> None:
+    """Debug picture of the multi-room segmentation: labelled free space, room ids + areas, passages, camera path."""
+    lab = seg.get("_labels")
+    fig, ax = plt.subplots(figsize=(9, 8))
+    if lab is not None and lab.size:
+        lo, res = seg["_grid"]["origin"], seg["_grid"]["res"]
+        ext = [lo[0], lo[0] + lab.shape[1] * res, lo[1], lo[1] + lab.shape[0] * res]
+        ax.imshow(np.ma.masked_equal(lab, 0), origin="lower", cmap="tab20", extent=ext, interpolation="nearest", alpha=0.85)
+        obs = seg.get("_obstacles")
+        if obs is not None:
+            ax.imshow(np.ma.masked_equal(obs.astype(int), 0), origin="lower", cmap="gray_r", extent=ext, interpolation="nearest", alpha=0.6)
+    for r in seg.get("rooms", []):
+        ax.text(*r["centroid"], f"{r['id']}\n{r['area_m2']:.1f} m2", ha="center", va="center", fontsize=8, weight="bold")
+    cen = {r["id"]: np.array(r["centroid"]) for r in seg.get("rooms", [])}
+    for c in seg.get("connections", []):
+        a, b = cen[c["a"]], cen[c["b"]]
+        ax.plot([a[0], b[0]], [a[1], b[1]], "k--", lw=1)
+        ax.text(*((a + b) / 2), f"{c['passage_width_m']:.2f} m", fontsize=7, ha="center", bbox=dict(fc="white", ec="none", alpha=0.7, pad=1))
+    if len(cam_uv):
+        ax.plot(cam_uv[:, 0], cam_uv[:, 1], color="#d62728", lw=0.8)
+    ax.set_aspect("equal"); ax.set_title(f"room segmentation (experimental): {len(seg.get('rooms', []))} rooms, {len(seg.get('dropped_basins', []))} dropped basins")
+    ax.grid(alpha=0.2)
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=130)
+    plt.close(fig)

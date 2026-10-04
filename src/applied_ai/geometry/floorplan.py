@@ -116,18 +116,20 @@ def floor_footprint(L: np.ndarray, walls: list[dict], cfg: dict, cam_uv: np.ndar
     else:
         out["warnings"].append("walls do not enclose a region; area comes from observed floor evidence only (may under-estimate)")
     # Reliability verdict: a footprint that fails these checks is NOT a measurement and must not be presented as one (confident garbage).
-    reasons = []
+    reasons, cov_reason = [], None
     if enc is None:
         reasons.append("walls do not enclose a region")
     else:
         if out.get("floor_coverage_frac", 1.0) < fc.get("min_floor_coverage", 0.5):
-            reasons.append(f"floor evidence backs only {out['floor_coverage_frac']:.0%} of the enclosed region")
+            cov_reason = f"floor evidence backs only {out['floor_coverage_frac']:.0%} of the enclosed region"
         cf = enc["camera_fraction_inside"]
         if cf is not None and cf < fc.get("min_camera_inside_frac", 0.5):
             reasons.append(f"only {cf:.0%} of camera positions lie inside the enclosed region")
         outside_m2 = out["enclosure"].get("floor_evidence_outside_region_m2", 0.0)
         if outside_m2 > fc.get("max_outside_evidence_frac", 0.5) * max(out["area_m2"], 1e-6):   # relative: a corridor seen through a door is normal
             reasons.append(f"{outside_m2:.1f} m2 of floor evidence lies outside the region ({outside_m2 / max(out['area_m2'], 1e-6):.0%} of its area)")
+    if cov_reason and reasons:   # sparse floor evidence alone only means a wall-based extrapolation (already a warning); it makes the area unreliable only
+        reasons.insert(0, cov_reason)   # together with a failed enclosure check (camera not inside / evidence outside / no enclosure)
     out["area_reliable"], out["unreliable_reasons"] = not reasons, reasons
     # Evidence-derived bounds used ONLY to widen the interval when the footprint is unreliable: observed floor is a lower bound for the
     # floor area of the scanned space, and the convex hull of the detected walls is a rough upper bound for the space they delimit.

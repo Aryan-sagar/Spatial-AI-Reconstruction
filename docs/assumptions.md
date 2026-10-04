@@ -22,8 +22,18 @@
 | Interval on floor area | **still the uncalibrated prior (rel 1.2%)** | the area interval does NOT yet reflect outline uncertainty (inferred corners, coverage); it will only be honest after `evaluate --calibrate` on real ground truth | needs ground truth |
 
 ## Footprint reliability (floorplan.min_camera_inside_frac, min_floor_coverage, max_outside_evidence_frac) - ASSUMED thresholds
-A wall-enclosed floor area is published as a tight `observed` measurement only if (a) at least 50% of camera positions lie inside the enclosed region,
-(b) floor evidence backs at least 50% of it, and (c) floor evidence outside the region is at most 50% of its area. Otherwise the area is published as
+A wall-enclosed floor area is published as a tight `observed` measurement unless (a) fewer than 50% of camera positions lie inside the enclosed region, or
+(c) floor evidence outside the region exceeds 50% of its area, or no region is enclosed. Floor evidence backing under 50% of the region (b) is listed as a reason
+only together with (a)/(c); on its own it is a warning (a correct, fully enclosed room that was mostly looked at horizontally must not be downgraded). Otherwise the area is published as
 `estimated`, `reliable: false`, with the failed checks as `unreliable_reasons`, and its interval is [observed floor evidence area, convex hull of the
 detected walls] instead of a tier prior; the plan draws it dashed red with the reasons. Thresholds are unvalidated: on the synthetic furnished rooms
 all four pass (corridor seen through the door stays at 3-11% outside evidence); on `single_room` all three fail. Revisit once real ground truth exists.
+
+## Multi-room segmentation (room_segmentation.*) - EXPERIMENTAL, ASSUMED parameters
+Whole-property scans (the recruiter's `single_scan_*` captures are walk-throughs of several rooms) cannot be handled as one room. `geometry/room_segmentation.py`
+splits the observed free space (floor evidence + camera trail, minus dilated wall-band cells) into rooms: persistence-filtered peaks of the distance transform
+(`h_maxima_m`) as seeds, a priority flood to label the core, margins re-attached by nearest label. Narrow passages between basins are doorways
+(`passage_width_m` = contact length, minus the obstacle dilation); basins under `min_room_area_m2` are dropped and listed, never merged silently.
+Areas are obstacle-shrunk free-space areas, NOT tape wall-to-wall. Validated on synthetic layouts only (3 rooms + 3 doors, single room, solid wall, tiny pocket);
+on the real scans it has only been eyeballed on masks recovered from debug images. Currently additive: `diagnostics.multiroom` + `debug/rooms.png`; the scene's
+`rooms` is still the single-room result.

@@ -144,3 +144,18 @@ uncertainty:
 
 debug:
   enabled: true                  # writes debug/floor_plane.ply, ceiling_plane.ply, walls.ply
+
+room_segmentation:               # multi-room split of the observed free space (ASSUMED parameters; tune on real scans)
+  cell_m: 0.04
+  closing_m: 0.20                # close small holes in floor evidence (furniture shadows)
+  obstacle_dilate_m: 0.08        # wall-band cells block free space this much beyond their own extent
+  min_free_component_m2: 1.5
+  smooth_sigma_cells: 1.0
+  core_min_dist_m: 0.15          # basins are found on free space at least this far from obstacles; the margin is re-attached by nearest label
+  margin_fill_m: 0.50
+  h_maxima_m: 0.20               # a basin needs to be this much deeper (inscribed radius) than the saddle towards its neighbour to be its own room
+  min_room_area_m2: 2.0          # smaller basins are dropped and reported in `dropped_basins`
+  polygon_epsilon_m: 0.10
+  min_passage_m: 0.30            # contact shorter than this is not an open passage
+  adjacent_gap_m: 0.40           # rooms separated by a wall up to about this thick count as adjacent
+  min_shared_boundary_m: 0.40
