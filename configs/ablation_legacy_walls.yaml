@@ -6,5 +6,6 @@ walls:
   min_column_extent_m: 0.0
   corner_extend_m: 0.0
   manhattan: {drop_non_conforming: false}
+  camera_crossing: {enabled: false}
 floorplan:
   prefer_wall_enclosed: false

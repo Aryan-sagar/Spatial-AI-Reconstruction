@@ -187,6 +187,7 @@ def test_unreliable_axis_frame_falls_back_to_legacy_and_says_so():
 def test_turning_the_column_filter_off_exposes_the_failure_it_prevents():
     cfg = load_config()
     cfg["walls"]["min_column_extent_m"] = 0.0
+    cfg["walls"]["camera_crossing"]["enabled"] = False   # isolate the column filter: the crossing filter also removes some of these ghost walls
     wl, fp, gt = _run_layout(cfg)
     assert len(wl["final"]) > 10 and abs(fp["area_m2"] / gt["area"] - 1) > 0.2      # table/bed rows become 'walls' and shred the outline (documented ablation)
 

@@ -1,0 +1,4 @@
+# Overlay on default.yaml: everything as default EXCEPT the camera-crossing wall filter (regenerates the 'before' for that fix on any scan):
+#   python -m applied_ai.cli run --input benchmark/<scan> --tier lidar --config configs/ablation_no_camera_crossing.yaml
+walls:
+  camera_crossing: {enabled: false}
