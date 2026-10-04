@@ -1,0 +1,10 @@
+# Overlay on default.yaml: the wall/footprint behaviour BEFORE the closure rework (free-angle RANSAC walls, no column filter, no corner
+# extension, off-axis walls kept, larger-of-evidence/enclosed area). Use to regenerate a 'before' on any scan:
+#   python -m applied_ai.cli run --input benchmark/<scan> --tier lidar --config configs/ablation_legacy_walls.yaml
+walls:
+  method: legacy_ransac
+  min_column_extent_m: 0.0
+  corner_extend_m: 0.0
+  manhattan: {drop_non_conforming: false}
+floorplan:
+  prefer_wall_enclosed: false

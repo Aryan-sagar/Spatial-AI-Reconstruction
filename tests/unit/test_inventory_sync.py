@@ -93,3 +93,13 @@ def test_sync_non_strict_returns_report(tmp_path, cfg):
     cfg["synchronization"]["strict"] = False
     inv = run(make_scan(tmp_path / "s", dt=0.5), cfg)
     assert FrameSynchronizer(cfg).run(inv.report(), tmp_path / "x.json")["status"] == "inconsistent"
+
+
+def test_inspect_does_not_crash_when_odometry_unusable(tmp_path, cfg):
+    root = make_scan(tmp_path / "s", n=3)
+    p = root / "odometry.csv"
+    p.write_text(p.read_text().replace("100.0, 100.0, 50.0, 40.0", "nan, nan, nan, nan"))
+    inv = run(root, cfg)
+    assert "odometry_invalid" in codes(inv)
+    cfg["synchronization"]["strict"] = False
+    assert FrameSynchronizer(cfg).check(inv.report())["status"] == "inconsistent"

@@ -63,12 +63,21 @@ def load_odometry(path: str | Path, quat_tol: float = 1e-3) -> OdometryTable:
 
     keep = REQUIRED_COLUMNS + [c for c in OPTIONAL_COLUMNS if c in df.columns]
     num = df[keep].apply(pd.to_numeric, errors="coerce")
-    bad = ~np.isfinite(num.to_numpy(dtype=float)).all(axis=1)
+    bad = ~np.isfinite(num[REQUIRED_COLUMNS].to_numpy(dtype=float)).all(axis=1)  # optional columns never drop rows
     warnings: list[str] = []
     n_bad = int(bad.sum())
     if n_bad:
         warnings.append(f"{n_bad} malformed/non-finite rows dropped (first row indices: {np.flatnonzero(bad)[:5].tolist()})")
+    for c in OPTIONAL_COLUMNS:
+        if c in num.columns and not np.isfinite(num[c].to_numpy(dtype=float)).all():
+            n_nf = int((~np.isfinite(num[c].to_numpy(dtype=float))).sum())
+            warnings.append(f"optional column {c} has {n_nf} non-finite values (rows kept)")
+    if n_bad:
+        cols = {c: int((~np.isfinite(num[c].to_numpy(dtype=float))).sum()) for c in REQUIRED_COLUMNS if (~np.isfinite(num[c].to_numpy(dtype=float))).any()}
+        warnings.append(f"non-finite values per required column: {cols}")
     num = num[~bad].reset_index(drop=True)
+    if len(num) == 0:
+        raise OdometryError(f"{path}: no valid rows remain ({n_bad} malformed of {len(df)})")
 
     frame_f = num["frame"].to_numpy()
     if not np.all(frame_f == np.round(frame_f)):

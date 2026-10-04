@@ -1,0 +1,3 @@
+# Overlay on default.yaml: new axis-wall method but WITHOUT the tall-column filter (isolates the filter's effect on a real scan).
+walls:
+  min_column_extent_m: 0.0

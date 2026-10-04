@@ -23,7 +23,7 @@ class FrameSynchronizer:
             checks.append({"check": name, "pass": bool(ok), "detail": detail})
 
         dep, rgb, odo = inventory_report.get("depth"), inventory_report.get("rgb"), inventory_report.get("odometry")
-        if not (dep and rgb and odo):
+        if not (dep and rgb and odo and odo.get("rows")):
             add("streams_present", False, f"depth={bool(dep)} rgb={bool(rgb)} odometry={bool(odo)}")
         else:
             nd, nr, no = dep["frames"], rgb["frames"], odo["rows"]
@@ -41,8 +41,9 @@ class FrameSynchronizer:
             else:
                 add("duration_agrees", False, "duration unavailable")
             # informational: non-uniform sampling does not break index alignment but must be visible
+            f = lambda v: "n/a" if v is None else f"{v:.6f}s"
             add("timestamp_spacing_info", True,
-                f"dt median={odo['dt_median']:.6f}s mean={odo['dt_mean']:.6f}s max={odo['dt_max']:.6f}s (median!=mean means non-uniform sampling)")
+                f"dt median={f(odo['dt_median'])} mean={f(odo['dt_mean'])} max={f(odo['dt_max'])} (median!=mean means non-uniform sampling)")
             add("timestamps_monotonic", odo["timestamps_monotonic"], "")
         ok = all(c["pass"] for c in checks)
         return {

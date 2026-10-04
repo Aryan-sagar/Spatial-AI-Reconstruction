@@ -25,7 +25,7 @@ class DatasetInventory:
 
     def _issue(self, severity: str, code: str, msg: str) -> None:
         self.issues.append({"severity": severity, "code": code, "message": msg})
-        (log.error if severity == "error" else log.warning)("%s: %s", code, msg)
+        {"error": log.error, "warning": log.warning}.get(severity, log.info)("%s: %s", code, msg)
 
     def scan(self, path: str | Path) -> dict:
         root = Path(path)
@@ -137,11 +137,15 @@ class DatasetInventory:
             return
         self.data["camera_matrix"] = m.tolist()
         if self.odometry is not None and self.odometry.n_rows:
-            df = self.odometry.df
-            tol = self.cfg["inventory"]["intrinsics_consistency_tolerance_px"]
-            for name, val in (("fx", m[0, 0]), ("fy", m[1, 1]), ("cx", m[0, 2]), ("cy", m[1, 2])):
-                if np.abs(df[name].to_numpy() - val).max() > tol:
-                    self._issue("warning", "intrinsics_disagree", f"camera_matrix {name}={val} differs from per-frame odometry {name} (range {df[name].min()}..{df[name].max()})")
+            from ..calibration.intrinsics import intrinsics_stats
+            st = intrinsics_stats(self.odometry.df, m)
+            self.data["intrinsics_stats"] = st
+            for name, v in st.items():
+                if not v["fixed_within_range"]:
+                    self._issue("warning", "intrinsics_disagree", f"camera_matrix {name}={v['fixed_matrix_value']} lies outside the per-frame odometry range [{v['min']}, {v['max']}]")
+            spread = (st["fx"]["max"] - st["fx"]["min"]) / st["fx"]["median"]
+            if spread > self.cfg["inventory"]["intrinsics_variation_note_frac"]:
+                self._issue("info", "intrinsics_vary", f"per-frame fx varies {spread:.1%} (min {st['fx']['min']:.1f}, max {st['fx']['max']:.1f}); a 1% focal error is ~1% length error")
 
     def _scan_imu(self, p: Path) -> None:
         if not p.exists():

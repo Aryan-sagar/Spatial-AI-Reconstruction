@@ -52,3 +52,20 @@ def test_malformed_row_counted(tmp_path):
 def test_non_monotonic_timestamps_warn(tmp_path):
     root = make_scan(tmp_path / "s", n=3, dt=-0.1)
     assert not load_odometry(root / "odometry.csv").summary()["timestamps_monotonic"]
+
+
+def test_nonfinite_optional_columns_do_not_drop_rows(tmp_path):
+    root = make_scan(tmp_path / "s", n=4)
+    p = root / "odometry.csv"
+    p.write_text(p.read_text().replace("50.0, 40.0\n", ",\n"))  # empty distortion centers
+    t = load_odometry(p)
+    assert t.n_rows == 4 and t.n_malformed_rows == 0
+    assert any("distortion_center_x" in w for w in t.warnings)
+
+
+def test_all_rows_malformed_raises_clearly(tmp_path):
+    root = make_scan(tmp_path / "s", n=3)
+    p = root / "odometry.csv"
+    p.write_text(p.read_text().replace("100.0, 100.0, 50.0, 40.0", "nan, nan, nan, nan"))
+    with pytest.raises(OdometryError, match="no valid rows"):
+        load_odometry(p)

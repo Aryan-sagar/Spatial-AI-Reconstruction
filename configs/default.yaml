@@ -10,6 +10,7 @@ dataset:
     imu: imu.csv
 
 inventory:
+  intrinsics_variation_note_frac: 0.02
   depth_sample_count: 5          # frames opened (first, last, evenly spaced) to check dims/dtype
   quaternion_norm_tolerance: 1.0e-3
   intrinsics_consistency_tolerance_px: 1.0e-3
@@ -25,10 +26,120 @@ calibration:
   depth_intrinsics: {mode: scaled_rgb_intrinsics}
 
 pose:
-  convention: camera_to_world    # NOT yet proven; see docs/assumptions.md
+  convention: camera_to_world    # pose_direction: camera_to_world | world_to_camera (provisional)
+  camera_axes: arkit             # axes of the camera frame the pose refers to: opencv (x right,y down,z fwd) | arkit (x right,y up,z back)
+
+auto_calibration:                # empirical selection of pose/axes/scale from multi-view depth consistency
+  enabled: true
+  n_frames: 16
+  pair_translation_m: [0.10, 1.00]
+  pair_max_rotation_deg: 35.0
+  stride: 6
+  scale_candidates: [0.0001, 0.001, 0.01]
+  min_valid_pairs: 4
+  max_median_rel_error: 0.08     # best candidate must beat this or the run fails loudly
+  min_scale_sensitivity: 1.3     # error at +/-10% scale must exceed error at 1.0 by this factor to call scale 'calibrated'
+  min_margin: 1.5                # best must be >= this factor better than the runner-up
 
 logging:
   level: INFO
 
 frames:
   imu_window_sec: 0.05           # IMU samples within +/- this of the frame timestamp are attached (clock relation unproven)
+
+reconstruction:
+  stride: 2
+  min_depth_m: 0.1
+  max_depth_m: 6.0
+  confidence_min: 1              # ARKit-style 0/1/2 semantics are ASSUMED (provisional); set 0 to disable
+  voxel_size_m: 0.03
+  max_points_per_batch: 4000000
+
+keyframes:
+  min_frame_gap: 10
+  translation_threshold: 0.05
+  rotation_threshold_deg: 3.0
+  max_frames: 300
+
+planes:
+  distance_threshold_m: 0.02
+  ransac_iterations: 1500
+  ransac_subsample: 40000
+  up_hint_max_deg: 20.0
+  up_hint_source: trajectory_pca # trajectory_pca (least-variance direction of camera positions) | pose_camera_up; verified by plane geometry + camera-height check
+  histogram_bin_m: 0.02
+  peak_min_frac: 0.15            # of max histogram count
+  min_camera_floor_gap_m: 0.3     # floor must lie at least this far below the cameras
+  imu_reading_direction: toward_gravity  # iOS CoreMotion: accelerometer reading points toward gravity (provisional assumption)
+  imu_device_to_camera: [[0, -1, 0], [-1, 0, 0], [0, 0, -1]]  # device(x right,y up,z out) -> OpenCV camera for iPhone's landscape-right sensor (provisional)
+  up_flip: false                  # manual override: set true if reported camera height / floor-ceiling roles are upside-down
+  imu_min_resultant: 0.85         # |mean world-frame gravity direction| needed to trust the IMU
+  imu_min_margin: 0.10            # best vs runner-up axis mapping
+  min_ceiling_height_m: 1.8
+  ceiling_min_prominence: 2.0     # peak count / median count of neighbouring heights (0.16-0.40 m away)
+  seed: 0
+
+walls:
+  band_floor_offset_m: 0.4       # use points between floor+offset and ceiling-offset
+  band_ceiling_offset_m: 0.3
+  no_ceiling_band_height_m: 1.6
+  cell_m: 0.02
+  line_inlier_m: 0.03
+  min_wall_length_m: 0.6
+  max_walls: 16
+  endpoint_trim_frac: 0.005
+  corner_snap_m: 0.30
+  manhattan: {enabled: true, snap_tolerance_deg: 6.0, drop_non_conforming: true}   # a wall off the dominant axes is dropped AND logged, never kept silently
+  method: manhattan_axes         # manhattan_axes (frame first, then axis-offset peaks) | legacy_ransac (free-angle RANSAC; kept for ablation)
+  axis_search_step_deg: 0.25
+  axis_hist_bin_m: 0.04
+  min_axis_contrast: 1.5         # ASSUMED: best/median histogram sharpness over angles; below it the axis frame is unreliable -> fall back to legacy_ransac, loudly
+  axis_capture_m: 0.05           # cells within this offset of a peak belong to that wall
+  bridge_min_occupancy: 0.5      # ...and at least this share of the run's 10 cm bins must hold cells (sparse scatter near the line is not wall)
+  bridge_min_run_m: 0.4          # axis mode: runs >= this are kept even across gaps > extent_gap_split_m (wall hidden behind furniture); stray shorter runs are ignored
+  min_column_extent_m: 0.4       # a 0.1 m column must span this vertical extent (m) to be wall evidence; 0 = off. Needed so table tops / beds (horizontal blobs) do not
+                                 # become rows of 'walls'. RISK: a wall seen only low (camera pitched down) is shortened if too high (0.6 did this in a synthetic test). ASSUMED; ablate on real data.
+  column_m: 0.10
+  column_min_points: 3
+  corner_extend_m: 1.0           # open wall ends are extended up to this far to a perpendicular wall; recorded as INFERRED (0 = off)
+  extent_gap_split_m: 1.5         # wall extent = largest run of cells without gaps wider than this
+  min_support_frac_of_best: 0.10
+  duplicate_offset_m: 0.15
+  duplicate_angle_deg: 5.0
+  camera_crossing: {enabled: true, support_radius_m: 0.25, min_support_cells: 8}   # drop a wall the camera path crosses where wall-band cells exist (gaps = doorways are allowed); ASSUMED thresholds
+  min_boundary_ray_frac: 0.02   # share of interior rays a wall must be first-hit by to count as a room boundary
+
+floorplan:
+  grid_resolution_m: 0.02
+  floor_band_m: 0.04
+  closing_radius_m: 0.10
+  minimum_room_area_m2: 1.0
+  polygon_epsilon_m: 0.05
+  prefer_wall_enclosed: true     # area/polygon from the wall-enclosed region holding the camera path whenever walls close (false = legacy: larger of evidence/enclosed)
+  min_camera_inside_frac: 0.5    # area is flagged UNRELIABLE if fewer camera positions than this lie inside the enclosed region
+  min_floor_coverage: 0.5        # warn if floor evidence backs less than this share of the enclosed region
+  outside_evidence_warn_m2: 0.5  # warn if this much floor evidence lies outside the enclosed region
+
+openings:
+  bin_m: 0.02
+  wall_band_m: 0.05
+  mid_band_m: [0.9, 1.5]
+  low_band_m: [0.1, 0.5]
+  min_width_m: 0.45
+  gap_density_frac: 0.15
+  edge_margin_m: 0.10
+  see_through_min_m: 0.15
+  see_through_min_points: 30
+
+uncertainty:
+  confidence_level: 0.95
+  z: 1.96
+  calibration_file: null          # JSON from `evaluate --calibrate`; if null, priors below are used and flagged uncalibrated
+  priors:                         # PRIORS, not measured accuracy. Wider for weaker tiers.
+    lidar: {rel: 0.012, abs_m: 0.010}
+    video: {rel: 0.04, abs_m: 0.05}
+    photo: {rel: 0.08, abs_m: 0.10}
+  low_support_inflation: 2.0
+
+debug:
+  enabled: true                  # writes debug/floor_plane.ply, ceiling_plane.ply, walls.ply
