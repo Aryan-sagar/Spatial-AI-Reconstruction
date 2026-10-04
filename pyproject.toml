@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "applied-ai"
 version = "0.0.1"
 requires-python = ">=3.10"
-dependencies = ["numpy", "scipy", "pandas", "opencv-python-headless", "PyYAML"]
+dependencies = ["numpy", "scipy", "pandas", "opencv-python-headless", "PyYAML", "matplotlib"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
