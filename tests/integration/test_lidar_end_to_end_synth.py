@@ -60,13 +60,13 @@ def test_biased_camera_up_hint_does_not_break_floor_detection(tmp_path, cfg):
     assert sorted(round(w["length"]["value"]) for w in r["walls"]) == [3, 3, 4, 4]
 
 
-def test_sparse_floor_evidence_yields_an_honest_empty_segmentation_not_a_wrong_room(tmp_path, cfg):
-    """KNOWN LIMITATION, kept as a test so it cannot be forgotten: this synthetic scan sees only ~1 m2 of the 12 m2 floor, and the segmentation derives free
-    space from floor evidence + camera trail, so it reports no rooms (with a warning) rather than a wrong one. Visibility carving from the camera
-    positions is the planned fix. The single-room measurements above are unaffected."""
+def test_visibility_carving_recovers_the_room_even_though_floor_evidence_is_sparse(tmp_path, cfg):
+    """This synthetic scan sees only ~1 m2 of the 12 m2 floor (floor-evidence-only segmentation found no room). Carving free space from the depth rays does."""
     gt, scene = _scene(tmp_path, cfg)
     mr = scene["diagnostics"]["multiroom"]
-    assert mr["status"] == "experimental_unvalidated" and mr["rooms"] == [] and mr["warnings"] and mr["dropped_basins"]
+    assert mr["status"] == "experimental_unvalidated" and "visibility carving" in mr["free_space_source"]
+    assert len(mr["rooms"]) == 1 and mr["connections"] == []
+    assert 0.7 * gt["area"] < mr["rooms"][0]["area_m2"] <= 1.02 * gt["area"]          # obstacle-shrunk free space, never above the room
     assert (tmp_path / "out" / "debug" / "rooms.png").stat().st_size > 1000
     assert not any(k.startswith("_") for k in mr)                                    # private arrays never leak into scene.json
-    assert scene["rooms"][0]["floor_area"]["status"] == "observed"                   # sparse floor alone does not downgrade a correct, enclosed area
+    assert scene["rooms"][0]["floor_area"]["status"] == "observed"                   # the single-room result is unchanged by the additive stage

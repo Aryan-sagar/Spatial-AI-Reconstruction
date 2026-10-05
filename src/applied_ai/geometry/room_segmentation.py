@@ -86,14 +86,15 @@ def _flood_labels(dist: np.ndarray, core: np.ndarray, markers: np.ndarray) -> np
     return lab
 
 
-def segment_rooms(floor_uv: np.ndarray, wall_cells: np.ndarray, cam_uv: np.ndarray | None, cfg: dict) -> dict:
+def segment_rooms(floor_uv: np.ndarray, wall_cells: np.ndarray, cam_uv: np.ndarray | None, cfg: dict, free_polys: list[np.ndarray] | None = None) -> dict:
     sc = cfg["room_segmentation"]
     res = sc["cell_m"]
     floor_uv, wall_cells = np.asarray(floor_uv, float).reshape(-1, 2), np.asarray(wall_cells, float).reshape(-1, 2)
     cam = np.asarray(cam_uv, float).reshape(-1, 2) if cam_uv is not None and len(cam_uv) else np.zeros((0, 2))
-    if len(floor_uv) == 0:
-        return {"rooms": [], "connections": [], "adjacent": [], "dropped_basins": [], "warnings": ["no floor evidence"]}
-    allp = np.vstack([floor_uv, wall_cells, cam]) if len(wall_cells) else np.vstack([floor_uv, cam]) if len(cam) else floor_uv
+    if len(floor_uv) == 0 and not free_polys and len(cam) < 2:
+        return {"rooms": [], "connections": [], "adjacent": [], "dropped_basins": [], "warnings": ["no floor evidence, free-space carving or camera trail"]}
+    parts = [floor_uv] + ([wall_cells] if len(wall_cells) else []) + ([cam] if len(cam) else []) + [np.asarray(q, float) for q in (free_polys or [])]
+    allp = np.vstack(parts)
     lo = allp.min(0) - 0.5
     shape = (np.ceil((allp.max(0) + 0.5 - lo) / res).astype(int))[::-1]
 
@@ -114,6 +115,13 @@ def segment_rooms(floor_uv: np.ndarray, wall_cells: np.ndarray, cam_uv: np.ndarr
         pts = to_ij(cam).reshape(-1, 1, 2).astype(np.int32)
         cv2.polylines(trail, [pts], False, 1, thickness=max(int(round(0.4 / res)), 1))
         free |= trail
+    if free_polys:   # space the camera actually saw to be empty (visibility carving), counted per frame; a pixel is free if enough frames agree
+        votes = np.zeros(shape, np.int32)
+        for q in free_polys:
+            m = np.zeros(shape, np.uint8)
+            cv2.fillPoly(m, [to_ij(q).astype(np.int32)], 1)
+            votes += m
+        free |= (votes >= sc.get("min_free_votes", 2)).astype(np.uint8)
     free = cv2.morphologyEx(free, cv2.MORPH_CLOSE, k(sc["closing_m"]))
     obst = cv2.dilate(stamp(wall_cells), k(sc["obstacle_dilate_m"])) if len(wall_cells) else np.zeros(shape, np.uint8)
     free = ((free > 0) & (obst == 0))
@@ -137,6 +145,41 @@ def segment_rooms(floor_uv: np.ndarray, wall_cells: np.ndarray, cam_uv: np.ndarr
     near, (ri, ci) = ndi.distance_transform_edt(ws == 0, return_indices=True)
     fill = free & (ws == 0) & (near <= sc["margin_fill_m"] / res)
     ws[fill] = ws[ri[fill], ci[fill]]
+    # A real doorway is bounded by wall material (jambs) at both ends of its contact line. A pinch with open, unseen space beside it is just
+    # a gap in what the camera saw inside ONE room: merge those basins instead of inventing a door.
+    jamb_r = int(round(sc["passage_jamb_search_m"] / res))
+    obst_b = obst > 0
+    merged_pinches = 0
+    while True:
+        contact_px: dict[tuple[int, int], list[np.ndarray]] = {}
+        for a, b, ai, bi in ((ws[:, :-1], ws[:, 1:], (slice(None), slice(None, -1)), (slice(None), slice(1, None))),
+                             (ws[:-1, :], ws[1:, :], (slice(None, -1), slice(None)), (slice(1, None), slice(None)))):
+            sel = (a != b) & (a > 0) & (b > 0)
+            rr, cc = np.nonzero(sel)
+            for r_, c_, x, y in zip(rr, cc, a[sel], b[sel]):
+                contact_px.setdefault((min(x, y), max(x, y)), []).append(np.array([r_, c_]))
+        target = None
+        for (i, j), px in contact_px.items():
+            P = np.array(px, float)
+            if len(P) * res < sc["min_passage_m"]:
+                continue
+            u, sv, vt = np.linalg.svd(P - P.mean(0), full_matrices=False)
+            proj = (P - P.mean(0)) @ vt[0]
+            ends = [P[np.argmin(proj)], P[np.argmax(proj)]]
+            ok = []
+            for e in ends:
+                r0, c0 = int(round(e[0])), int(round(e[1]))
+                win = obst_b[max(r0 - jamb_r, 0): r0 + jamb_r + 1, max(c0 - jamb_r, 0): c0 + jamb_r + 1]
+                ok.append(bool(win.any()))
+            if not all(ok):
+                target = (i, j)
+                break
+        if target is None:
+            break
+        i, j = target
+        keep, drop = (i, j) if (ws == i).sum() >= (ws == j).sum() else (j, i)
+        ws[ws == drop] = keep
+        merged_pinches += 1
     # basins below the minimum area are dropped and reported
     rooms, dropped, relabel = [], [], np.zeros(nm + 2, int)
     warnings: list[str] = []
@@ -180,5 +223,5 @@ def segment_rooms(floor_uv: np.ndarray, wall_cells: np.ndarray, cam_uv: np.ndarr
     if not rooms:
         warnings.append(f"no basin reached min_room_area_m2={sc['min_room_area_m2']}: free space is derived from floor evidence and camera trail, "
                         f"which are too sparse here ({float(free.sum() * res * res):.1f} m2 of free space)")
-    return {"rooms": rooms, "connections": connections, "adjacent": adjacent, "dropped_basins": dropped, "warnings": warnings,
+    return {"rooms": rooms, "connections": connections, "adjacent": adjacent, "dropped_basins": dropped, "merged_unbounded_passages": merged_pinches, "warnings": warnings,
             "_labels": lab2, "_markers": markers, "_free": free, "_dist": dist, "_grid": {"origin": lo.tolist(), "res": res}, "_obstacles": obst > 0}

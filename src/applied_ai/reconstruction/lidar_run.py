@@ -14,6 +14,7 @@ from ..geometry.floorplan import floor_footprint
 from ..geometry.openings import detect_openings
 from ..geometry.room_layout import extract_walls
 from ..geometry.room_segmentation import segment_rooms
+from ..geometry.visibility import frame_free_polygons
 from ..geometry.rooms import build_room
 from ..io.dataset import ScanDataset
 from ..logging_utils import stage
@@ -21,7 +22,7 @@ from ..output.provenance import build_provenance
 from ..output.renderer import render_plan, render_rooms, render_topdown
 from ..output.schema import SCHEMA_VERSION, iter_measurements, validate_scene
 from ..uncertainty import UncertaintyModel
-from .pipeline import keyframe_ids, reconstruct_frame, reconstruct_scene_cloud
+from .pipeline import frame_world_points, keyframe_ids, reconstruct_frame, reconstruct_scene_cloud
 from .pointcloud import write_ply
 
 log = logging.getLogger(__name__)
@@ -91,7 +92,15 @@ def run_lidar(scan: Path, cfg: dict, out_dir: Path, config_path: str | None = No
     with stage("floorplan", timings):
         fp = floor_footprint(L, final, cfg, cam_uv)
     with stage("room_segmentation", timings):   # additive: does not change the single-room scene below; reported in diagnostics + debug/rooms.png
-        seg = segment_rooms(L[np.abs(L[:, 2]) < cfg["floorplan"]["floor_band_m"], :2], cells, cam_uv, cfg)
+        free_polys: list = []
+        if cfg["visibility"]["enabled"]:   # carve free space from every keyframe's depth (re-reads the keyframes; floor evidence alone is sparse)
+            with ScanDataset(scan, cfg) as ds2:
+                for fid, c_uv in zip(kf_ids, cam_uv):
+                    _, w, _ = frame_world_points(ds2, fid, cfg)
+                    if len(w):
+                        free_polys += frame_free_polygons(c_uv, cs.to_local(w), cfg)
+        seg = segment_rooms(L[np.abs(L[:, 2]) < cfg["floorplan"]["floor_band_m"], :2], cells, cam_uv, cfg, free_polys=free_polys)
+        seg["free_space_source"] = f"visibility carving ({len(free_polys)} frame fans) + floor evidence" if free_polys else "floor evidence + camera trail only"
     log.info("room segmentation: %d basins kept (%s m2), %d dropped, %d open passages", len(seg["rooms"]), [round(r["area_m2"], 1) for r in seg["rooms"]],
              len(seg["dropped_basins"]), len(seg["connections"]))
     if not fp.get("area_reliable", True):

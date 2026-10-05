@@ -147,6 +147,7 @@ debug:
 
 room_segmentation:               # multi-room split of the observed free space (ASSUMED parameters; tune on real scans)
   cell_m: 0.04
+  min_free_votes: 2              # a pixel carved free by at least this many frames counts as free space
   closing_m: 0.20                # close small holes in floor evidence (furniture shadows)
   obstacle_dilate_m: 0.08        # wall-band cells block free space this much beyond their own extent
   min_free_component_m2: 1.5
@@ -156,6 +157,17 @@ room_segmentation:               # multi-room split of the observed free space (
   h_maxima_m: 0.20               # a basin needs to be this much deeper (inscribed radius) than the saddle towards its neighbour to be its own room
   min_room_area_m2: 2.0          # smaller basins are dropped and reported in `dropped_basins`
   polygon_epsilon_m: 0.10
+  passage_jamb_search_m: 0.30    # a passage only separates two rooms if wall-band evidence lies within this distance of BOTH ends of its contact line; else the basins are merged
   min_passage_m: 0.30            # contact shorter than this is not an open passage
   adjacent_gap_m: 0.40           # rooms separated by a wall up to about this thick count as adjacent
   min_shared_boundary_m: 0.40
+
+visibility:                      # free-space carving from depth frames (ASSUMED parameters)
+  enabled: true
+  h_band_m: [0.25, 1.80]         # points in this height band bound the 2-D visibility (wall + furniture); floor and ceiling are excluded
+  angle_bin_deg: 1.0
+  min_points_per_bin: 3
+  range_percentile: 10           # nearest-surface range per bearing bin, robust to a few outliers
+  margin_m: 0.10                 # stop the carve this far before the surface
+  max_range_m: 6.0
+  gap_bins: 3                    # bearing bins without points up to this many are bridged inside one fan; larger gaps start a new fan
