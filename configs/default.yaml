@@ -106,6 +106,14 @@ walls:
   min_support_frac_of_best: 0.10
   duplicate_offset_m: 0.15
   duplicate_angle_deg: 5.0
+  high_band:                     # perimeter evidence above furniture height (needs an observed ceiling); ASSUMED thresholds
+    enabled: true
+    min_h_m: 2.10                # above typical wardrobes / shelves; doors and windows are in the wall plane, so they do not matter
+    ceiling_margin_m: 0.25       # stay clear of the ceiling plane (tilt / noise)
+    min_cells: 200
+    support_tol_m: 0.10
+    min_support: 0.35            # a candidate wall needs high-band cells along at least this fraction of its length, else it is a furniture face
+    min_supported_walls: 2        # fewer supported walls than this: filter skipped (not enough evidence to decide), and recorded
   camera_crossing: {enabled: true, support_radius_m: 0.25, min_support_cells: 8}   # drop a wall the camera path crosses where wall-band cells exist (gaps = doorways are allowed); ASSUMED thresholds
   min_boundary_ray_frac: 0.02   # share of interior rays a wall must be first-hit by to count as a room boundary
 

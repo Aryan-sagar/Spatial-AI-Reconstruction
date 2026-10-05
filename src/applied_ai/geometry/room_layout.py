@@ -6,8 +6,8 @@ import logging
 
 import numpy as np
 
-from .walls import (close_corners, dedupe_walls, detect_walls, detect_walls_axes, dominant_axes, drop_camera_crossed, manhattan_regularize,
-                    prune_non_boundary, snap_corners, wall_band_cells)
+from .walls import (close_corners, dedupe_walls, detect_walls, detect_walls_axes, dominant_axes, drop_camera_crossed, filter_by_high_band, high_band_cells,
+                    manhattan_regularize, prune_non_boundary, snap_corners, wall_band_cells)
 
 log = logging.getLogger(__name__)
 
@@ -38,14 +38,16 @@ def extract_walls(L: np.ndarray, cam_uv: np.ndarray, ceiling_h: float | None, cf
         reg, minfo = manhattan_regularize(raw_walls, cfg)
     if not raw_walls:
         raise RuntimeError("no walls detected (band %s, %d cells); see debug artifacts" % (band, len(cells)))
+    reg, hb_info = filter_by_high_band(reg, high_band_cells(L, ceiling_h, cfg), cfg)   # lines that exist only at furniture height are not the perimeter
     reg, crossing_info = drop_camera_crossed(reg, cam_uv, cells, cfg)  # interior lines the camera walked through are not walls
     reg, prune_info = prune_non_boundary(reg, cam_uv, cfg)
     prune_info["camera_crossing"] = crossing_info
+    prune_info["high_band"] = hb_info
     keep_ids = {w["id"] for w in reg}
     all_raw_walls = raw_walls
     raw_walls = [w for w in raw_walls if w["id"] in keep_ids]
     final = close_corners(snap_corners(reg, cfg), cfg)
     minfo.update(duplicates_dropped=dup_dropped, boundary_pruning=prune_info, method_requested=method_req, method_used=method_used,
-                 axes=axes_info, axis_rejected=winfo.get("rejected", []), column_filter=col_stats, camera_crossing=crossing_info)
+                 axes=axes_info, axis_rejected=winfo.get("rejected", []), column_filter=col_stats, camera_crossing=crossing_info, high_band=hb_info)
     log.info("walls: method=%s, %d kept (%d candidates), non-conforming: %d", method_used, len(final), len(all_raw_walls), len(minfo.get("non_conforming", [])))
     return {"cells": cells, "band": band, "all_raw_walls": all_raw_walls, "raw_walls": raw_walls, "final": final, "minfo": minfo, "prune_info": prune_info}

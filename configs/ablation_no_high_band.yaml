@@ -1,0 +1,4 @@
+# Overlay on default.yaml: everything as default EXCEPT the high-band perimeter filter (regenerates the 'before' for that fix on any scan):
+#   python -m applied_ai.cli run --input benchmark/<scan> --tier lidar --config configs/ablation_no_high_band.yaml --output outputs/<scan>_before
+walls:
+  high_band: {enabled: false}

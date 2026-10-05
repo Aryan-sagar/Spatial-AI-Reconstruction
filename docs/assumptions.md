@@ -37,3 +37,12 @@ splits the observed free space (floor evidence + camera trail, minus dilated wal
 Areas are obstacle-shrunk free-space areas, NOT tape wall-to-wall. Validated on synthetic layouts only (3 rooms + 3 doors, single room, solid wall, tiny pocket);
 on the real scans it has only been eyeballed on masks recovered from debug images. Currently additive: `diagnostics.multiroom` + `debug/rooms.png`; the scene's
 `rooms` is still the single-room result.
+
+## High-band perimeter filter (walls.high_band.*) - ASSUMED thresholds, first-real-scan fix
+Evidence (room A, first real benchmark room, LiDAR): the kept left wall sat ~0.45 m inside the top wall's end, the outermost parallel lines all had boundary-ray
+fraction 0.0 (blocked by objects in front), and the footprint came out at 8.1 m2 against a measured ~15.7 m2. Hypothesis: tall furniture along the walls produces a
+well-supported line at furniture height; ray pruning prefers it and discards the real wall behind it. Fix: when the ceiling is observed, candidate walls need cell
+support above `min_h_m` (2.10 m) up to ceiling - `ceiling_margin_m`, where almost only walls exist; candidates without it are dropped as furniture-height-only
+and listed in `diagnostics ... boundary_pruning.high_band`. Skipped, and recorded, when the ceiling is unobserved, the band has too few cells, or fewer than
+`min_supported_walls` candidates are supported. Limits: cabinets taller than 2.1 m (kitchens) pass as walls; a scan that never looked up has no high band.
+Validated on a synthetic wardrobe-along-the-wall room only (area error -8% -> +0.5%, four rotations); NOT yet shown on room A.

@@ -7,5 +7,6 @@ walls:
   corner_extend_m: 0.0
   manhattan: {drop_non_conforming: false}
   camera_crossing: {enabled: false}
+  high_band: {enabled: false}
 floorplan:
   prefer_wall_enclosed: false

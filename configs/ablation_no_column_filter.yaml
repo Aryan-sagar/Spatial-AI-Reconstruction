@@ -2,3 +2,4 @@
 walls:
   min_column_extent_m: 0.0
   camera_crossing: {enabled: false}   # keep the ablation about the column filter only
+  high_band: {enabled: false}

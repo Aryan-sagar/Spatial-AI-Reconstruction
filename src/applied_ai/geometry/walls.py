@@ -482,3 +482,52 @@ def drop_camera_crossed(walls: list[dict], cam_uv: np.ndarray, cells: np.ndarray
         else:
             keep.append(w)
     return keep, {"enabled": True, "dropped": dropped, "support_radius_m": rad, "min_support_cells": need}
+
+
+def high_band_cells(L: np.ndarray, ceiling_h: float | None, cfg: dict) -> np.ndarray | None:
+    """Occupied 2-D cells from points ABOVE furniture height (walls.high_band.min_h_m .. ceiling - margin), no column filter. In that band almost only the
+    room's perimeter walls exist, so it tells a wall that runs to the ceiling from the face of a wardrobe / shelf / bed headboard that merely stands in front
+    of it. Needs an observed ceiling and enough points; returns None (filter skipped, loudly) otherwise."""
+    hb = cfg["walls"].get("high_band", {})
+    if not hb.get("enabled", False) or ceiling_h is None:
+        return None
+    lo, hi = float(hb["min_h_m"]), ceiling_h - float(hb["ceiling_margin_m"])
+    if hi - lo < 0.25:
+        return None
+    P = L[(L[:, 2] >= lo) & (L[:, 2] <= hi), :2]
+    c = cfg["walls"]["cell_m"]
+    if len(P) == 0:
+        return None
+    cells = (np.unique(np.floor(P / c).astype(np.int64), axis=0) + 0.5) * c
+    return cells if len(cells) >= int(hb.get("min_cells", 200)) else None
+
+
+def high_band_support(w: dict, hb_cells: np.ndarray, cfg: dict) -> float:
+    """Fraction of the wall's length (0.1 m bins) that has high-band cells within support_tol_m of its line."""
+    hb = cfg["walls"]["high_band"]
+    sd = hb_cells @ w["normal"] + w["d"]
+    s = (hb_cells - w["centroid"]) @ w["direction"]
+    on = (np.abs(sd) <= hb["support_tol_m"]) & (s >= w["s_min"]) & (s <= w["s_max"])
+    n_bins = max(int(np.ceil((w["s_max"] - w["s_min"]) / 0.1)), 1)
+    if not on.any():
+        return 0.0
+    occ = np.unique(np.floor((s[on] - w["s_min"]) / 0.1).astype(int).clip(0, n_bins - 1))
+    return float(len(occ) / n_bins)
+
+
+def filter_by_high_band(walls: list[dict], hb_cells: np.ndarray | None, cfg: dict) -> tuple[list[dict], dict]:
+    """Drop candidate walls that exist only at furniture height. Skipped (and said so) when the high band is unavailable or when fewer than
+    walls.high_band.min_supported_walls candidates are supported, because then the evidence is too thin to decide and dropping would be a guess."""
+    hb = cfg["walls"].get("high_band", {})
+    if not hb.get("enabled", False):
+        return walls, {"enabled": False}
+    if hb_cells is None:
+        return walls, {"enabled": True, "applied": False, "reason": "no usable high band (ceiling unobserved, too few points, or band empty)"}
+    sup = {w["id"]: high_band_support(w, hb_cells, cfg) for w in walls}
+    ok = [w for w in walls if sup[w["id"]] >= hb["min_support"]]
+    info = {"enabled": True, "applied": True, "high_band_cells": int(len(hb_cells)), "support": {k: round(v, 3) for k, v in sup.items()},
+            "dropped": [{"id": w["id"], "support": round(sup[w["id"]], 3), "length_m": float(wall_length(w))} for w in walls if sup[w["id"]] < hb["min_support"]]}
+    if len(ok) < int(hb.get("min_supported_walls", 2)):
+        info.update(applied=False, reason=f"only {len(ok)} walls have high-band support (< {hb.get('min_supported_walls', 2)}); filter not applied", dropped=[])
+        return walls, info
+    return ok, info
