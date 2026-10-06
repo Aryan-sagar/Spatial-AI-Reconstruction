@@ -1,0 +1,6 @@
+numpy
+scipy
+pandas
+opencv-python-headless
+PyYAML
+matplotlib

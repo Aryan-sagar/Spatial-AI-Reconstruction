@@ -1,0 +1,4 @@
+ceiling_height_m: 3.45
+floor_area_m2: 15.67
+wall_lengths_m: [3.33, 3.32, 3.32, 3.33]
+opening_widths_m: [0.99, 1.50, 1.20]

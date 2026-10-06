@@ -1,7 +1,9 @@
-# Device matrix (only what was actually observed)
+# Device matrix
 
-| tier | device | capture method | required sensors | supported resolution | expected accuracy | known limitations |
-|---|---|---|---|---|---|---|
-| lidar | not recorded in the dataset (files: rgb.mp4 1920x1440, 256x192 uint16 depth, confidence, odometry, imu) | handheld scan | depth + pose + intrinsics | 256x192 depth | **not yet measured on real ground truth** | tested only on 3 supplied scans (inspection) and a synthetic room (logic) |
-| video | - | - | - | - | - | not implemented |
-| photo | - | - | - | - | - | not implemented |
+| Tier | Hardware | Runs? | Honest accuracy (measured) |
+|---|---|---|---|
+| LiDAR | iPhone Pro-class with LiDAR, model: **[FILL: Settings > General > About]**, export from Stray Scanner (assumed) | Yes (single room) | Room A, 2 scans, Measure-app ground truth (not tape): ceiling 3.30 m vs 3.45 m measured (15 cm), repeat spread 2.2 cm; floor area 13.9 m2 vs 15.67 m2 measured (-11%); wall lengths and openings: see `docs/fix_loop_declaration.md`. Intervals are uncalibrated priors. |
+| Video | iPhone 15 or newer | **No** | Not implemented. |
+| Photo | iPhone 15 or newer | **No** | Not implemented. |
+
+Recruiter-provided scans (`single_room`, `single_scan_floor_only`, `single_scan_with_ceiling`) have no ground truth; they are development data only. On the two walkthrough scans the pipeline refuses to certify an area (marked unreliable with a wide range).
