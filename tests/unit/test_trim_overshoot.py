@@ -50,3 +50,13 @@ def test_a_corridor_wall_touching_the_line_from_outside_is_not_a_corner():
     west = _wall(2, (0, 0), (0, 3.7))
     out, log = trim_overshoot([south, corridor, west], cfg, np.array([[3.0, 1.8]]))
     assert abs(wall_length(out[0]) - 5.9) < 1e-6 and all(e["id"] != "w0" for e in log)
+
+
+def test_a_stub_that_meets_a_wall_at_its_far_end_is_not_cut_to_nothing():
+    """Seen on room A: a 0.97 m stub ending at the bottom wall was trimmed to 0.00 m because the crossing was 0.97 m from its OTHER end."""
+    cfg = load_config()
+    bottom = _wall(0, (0, 0), (3.3, 0))
+    stub = _wall(1, (0.4, 0.97), (0.4, 0.0))          # 0.97 m, ends on the bottom wall
+    left = _wall(2, (0, 0), (0, 4.0))
+    out, log = trim_overshoot([bottom, stub, left], cfg, np.array([[1.6, 2.0]]))
+    assert abs(wall_length(out[1]) - 0.97) < 1e-6 and all(e["id"] != "w1" for e in log)

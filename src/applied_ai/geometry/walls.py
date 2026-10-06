@@ -543,6 +543,7 @@ def trim_overshoot(walls: list[dict], cfg: dict, interior_uv: np.ndarray | None 
     if not tc.get("enabled", False):
         return walls, []
     lo_m, hi_m, tol, arm_m = float(tc["min_m"]), float(tc["max_m"]), float(tc["tol_m"]), float(tc.get("arm_m", 0.5))
+    keep_min = float(cfg["walls"].get("min_wall_length_m", 0.6))
     inside = None if interior_uv is None or len(interior_uv) == 0 else np.asarray(interior_uv, float).reshape(-1, 2).mean(0)
     out, log_ = [], []
     for i, w in enumerate(walls):
@@ -562,6 +563,9 @@ def trim_overshoot(walls: list[dict], cfg: dict, interior_uv: np.ndarray | None 
                 so = float((X - o["centroid"]) @ o["direction"])
                 over = (w["s_max"] - sx) if k == 1 else (sx - w["s_min"])          # how far the wall runs past the crossing at this end
                 if not (lo_m <= over <= hi_m and o["s_min"] - tol <= so <= o["s_max"] + tol):
+                    continue
+                kept_m = (sx - w["s_min"]) if k == 1 else (w["s_max"] - sx)               # what would remain of this wall after the cut
+                if kept_m < max(over, keep_min):                                          # never cut away most of a wall (a stub meeting a wall at its far end)
                     continue
                 if inside is not None:
                     arm = max(side * float(w["normal"] @ e + w["d"]) for e in endpoints(o))   # reach of the other wall towards the interior side
