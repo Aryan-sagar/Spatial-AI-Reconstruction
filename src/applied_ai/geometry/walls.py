@@ -531,3 +531,47 @@ def filter_by_high_band(walls: list[dict], hb_cells: np.ndarray | None, cfg: dic
         info.update(applied=False, reason=f"only {len(ok)} walls have high-band support (< {hb.get('min_supported_walls', 2)}); filter not applied", dropped=[])
         return walls, info
     return ok, info
+
+
+def trim_overshoot(walls: list[dict], cfg: dict, interior_uv: np.ndarray | None = None) -> tuple[list[dict], list[dict]]:
+    """Room walls are measured corner to corner. A fitted line often runs on past a perpendicular wall (the cells continue behind the corner: a neighbouring
+    space seen through a door, the next room's wall on the same line). Cut each wall end at the nearest perpendicular wall that (a) crosses its line within
+    [min_m, max_m] of that end, (b) covers the crossing (+/- tol_m) and (c) reaches at least `arm_m` from the crossing towards the room interior (the camera
+    side). (c) separates a room corner from, say, a corridor wall that touches the line from the outside at a doorway. Longer runs than max_m are left alone
+    (more likely a through wall / interior partition). Every cut is recorded; geometry is never extended here."""
+    tc = cfg["walls"].get("trim_overshoot", {})
+    if not tc.get("enabled", False):
+        return walls, []
+    lo_m, hi_m, tol, arm_m = float(tc["min_m"]), float(tc["max_m"]), float(tc["tol_m"]), float(tc.get("arm_m", 0.5))
+    inside = None if interior_uv is None or len(interior_uv) == 0 else np.asarray(interior_uv, float).reshape(-1, 2).mean(0)
+    out, log_ = [], []
+    for i, w in enumerate(walls):
+        s = [w["s_min"], w["s_max"]]
+        cuts = [0.0, 0.0]
+        side = 1.0 if inside is None else (np.sign(w["normal"] @ inside + w["d"]) or 1.0)
+        for k in (0, 1):
+            best = None
+            for j, o in enumerate(walls):
+                if j == i or abs(w["direction"] @ o["direction"]) > np.cos(np.radians(60)):
+                    continue
+                try:
+                    X = np.linalg.solve(np.array([w["normal"], o["normal"]]), -np.array([w["d"], o["d"]]))
+                except np.linalg.LinAlgError:
+                    continue
+                sx = float((X - w["centroid"]) @ w["direction"])
+                so = float((X - o["centroid"]) @ o["direction"])
+                over = (w["s_max"] - sx) if k == 1 else (sx - w["s_min"])          # how far the wall runs past the crossing at this end
+                if not (lo_m <= over <= hi_m and o["s_min"] - tol <= so <= o["s_max"] + tol):
+                    continue
+                if inside is not None:
+                    arm = max(side * float(w["normal"] @ e + w["d"]) for e in endpoints(o))   # reach of the other wall towards the interior side
+                    if arm < arm_m:
+                        continue
+                if best is None or over < best[0]:
+                    best = (over, sx)
+            if best is not None:
+                s[k], cuts[k] = best[1], best[0]
+        if any(cuts):
+            log_.append({"id": w["id"], "trimmed_m": cuts})
+        out.append(dict(w, s_min=s[0], s_max=s[1], trimmed_overshoot_m=cuts))
+    return out, log_

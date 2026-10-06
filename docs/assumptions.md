@@ -46,3 +46,11 @@ support above `min_h_m` (2.10 m) up to ceiling - `ceiling_margin_m`, where almos
 and listed in `diagnostics ... boundary_pruning.high_band`. Skipped, and recorded, when the ceiling is unobserved, the band has too few cells, or fewer than
 `min_supported_walls` candidates are supported. Limits: cabinets taller than 2.1 m (kitchens) pass as walls; a scan that never looked up has no high band.
 Validated on a synthetic wardrobe-along-the-wall room only (area error -8% -> +0.5%, four rotations); NOT yet shown on room A.
+
+## Corner-to-corner wall lengths (walls.trim_overshoot) - ASSUMED thresholds
+Fitted wall lines ran past the perpendicular wall they meet (room A: the right wall 0.65 m past the top wall, the bottom wall 0.3 m past the right wall), so
+opposite walls of one room reported lengths 0.3-0.65 m apart. A wall end is now cut at the nearest perpendicular wall that crosses it 0.12-1.0 m from that end,
+covers the crossing, and reaches >= 0.5 m from it towards the room interior (camera side); the last condition keeps a corridor wall that touches the line from
+outside a doorway from being treated as a corner. Cuts are logged in `walls...trimmed_overshoot`; nothing is ever extended. A genuine alcove wider than 1 m or a
+through wall shorter than 1.0 m past a partition would be wrongly cut; validated on synthetic geometry only.
+Fix-loop configs: `configs/fix_before.yaml` (both wall fixes off) and `configs/fix_after.yaml` (default).

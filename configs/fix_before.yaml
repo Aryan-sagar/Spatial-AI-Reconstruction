@@ -1,0 +1,5 @@
+# Fix-loop 'before': the pipeline as it stood when the first room A gate numbers were measured, i.e. WITHOUT the two wall fixes shipped for them
+# (high-band perimeter support, corner-to-corner overshoot trimming). Everything else is the default.
+walls:
+  high_band: {enabled: false}
+  trim_overshoot: {enabled: false}

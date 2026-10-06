@@ -1,0 +1,2 @@
+# Fix-loop 'after': the shipped default (identical to configs/lidar.yaml); kept as an explicit file so before/after are symmetric and regenerable.
+logging: {level: INFO}

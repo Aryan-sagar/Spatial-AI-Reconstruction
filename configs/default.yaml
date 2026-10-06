@@ -106,6 +106,7 @@ walls:
   min_support_frac_of_best: 0.10
   duplicate_offset_m: 0.15
   duplicate_angle_deg: 5.0
+  trim_overshoot: {enabled: true, min_m: 0.12, max_m: 1.0, tol_m: 0.20, arm_m: 0.5}   # cut a wall end that runs 0.12-1.0 m past a perpendicular wall; ASSUMED
   high_band:                     # perimeter evidence above furniture height (needs an observed ceiling); ASSUMED thresholds
     enabled: true
     min_h_m: 2.10                # above typical wardrobes / shelves; doors and windows are in the wall plane, so they do not matter
